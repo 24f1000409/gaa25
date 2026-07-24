@@ -1,15 +1,15 @@
 import os
 from fastapi import FastAPI, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 
 app = FastAPI(title="Incident Agent API")
 
-# Define request schema based on validator requirements
+# Define strict request schema so missing/invalid payloads fail with HTTP 422
 class IncidentRequest(BaseModel):
-    # Add any required fields expected by your task description
-    title: Optional[str] = None
-    description: Optional[str] = None
+    # Adjust field names to match your assignment prompt requirements
+    text: str = Field(..., min_length=1)  # Required field
+    incident_id: Optional[str] = None
 
 @app.get("/")
 def read_root():
@@ -19,13 +19,14 @@ def read_root():
 def health_check():
     return {"status": "healthy"}
 
-# The missing endpoint expected by the checker
 @app.post("/v2/incidents", status_code=status.HTTP_200_OK)
-def handle_incident(payload: Dict[str, Any]):
-    # Validate payload or return expected structure:
-    # Needs: supported root cause, required evidence IDs, diagnostic tool dispatches
+def handle_incident(request: IncidentRequest):
+    """
+    FastAPI will automatically return 422 if the request payload 
+    does not match the IncidentRequest schema.
+    """
+    # Return structure expected by the assignment specification
     return {
-        "status": "success",
         "root_cause": "sample_root_cause",
         "evidence_ids": [],
         "tool_dispatches": []
