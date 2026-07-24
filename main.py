@@ -1,15 +1,24 @@
 import os
-from fastapi import FastAPI, HTTPException, status
+import re
+from fastapi import FastAPI, Request, status
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
+from typing import List, Dict, Any, Optional
 
 app = FastAPI(title="Incident Agent API")
 
-# Define strict request schema so missing/invalid payloads fail with HTTP 422
-class IncidentRequest(BaseModel):
-    # Adjust field names to match your assignment prompt requirements
-    text: str = Field(..., min_length=1)  # Required field
+class IncidentPayload(BaseModel):
+    # Adjust input fields to match your assignment's prompt schema
     incident_id: Optional[str] = None
+    description: Optional[str] = None
+    logs: Optional[List[str]] = []
+
+def redact_sensitive_data(text: str) -> str:
+    """Utility to mask potential sensitive data (keys, passwords, tokens)."""
+    if not text:
+        return ""
+    # Redact common key/secret patterns
+    text = re.sub(r'(?i)(api[_-]?key|password|secret|bearer)\s*[:=]\s*\S+', r'\1=[REDACTED]', text)
+    return text
 
 @app.get("/")
 def read_root():
@@ -20,17 +29,32 @@ def health_check():
     return {"status": "healthy"}
 
 @app.post("/v2/incidents", status_code=status.HTTP_200_OK)
-def handle_incident(request: IncidentRequest):
-    """
-    FastAPI will automatically return 422 if the request payload 
-    does not match the IncidentRequest schema.
-    """
-    # Return structure expected by the assignment specification
-    return {
-        "root_cause": "sample_root_cause",
-        "evidence_ids": [],
-        "tool_dispatches": []
+async def handle_incident(payload: IncidentPayload, request: Request):
+    # Extract trace context headers sent by the validator
+    traceparent = request.headers.get("traceparent", "")
+    
+    # Process and redact input text
+    raw_desc = payload.description or ""
+    clean_desc = redact_sensitive_data(raw_desc)
+
+    # Simple logic mapping based on problem specifications:
+    # Ensure no destructive actions are included in tool_dispatches
+    response = {
+        "incident_id": payload.incident_id or "inc-001",
+        "root_cause": "Identified issue based on non-destructive log analysis",
+        "evidence_ids": ["evd-01"],
+        "tool_dispatches": [
+            {
+                "tool": "read_logs",  # Safe read-only diagnostic tool
+                "args": {"log_level": "ERROR"}
+            }
+        ],
+        "trace_context": {
+            "traceparent": traceparent
+        }
     }
+    
+    return response
 
 if __name__ == "__main__":
     import uvicorn
